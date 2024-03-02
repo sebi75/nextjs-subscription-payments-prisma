@@ -10,10 +10,6 @@ import { env } from '@/env';
 import { db } from '@/lib/db';
 import GoogleProvider from 'next-auth/providers/google';
 
-export type UserMetadata = {
-  uploadedCharacters: number;
-};
-
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
  * object and keep type safety.
@@ -24,15 +20,12 @@ declare module 'next-auth' {
   interface Session extends DefaultSession {
     user: DefaultSession['user'] & {
       id: string;
-      metadata: UserMetadata;
-      lastVisitedAt: Date;
     };
   }
 
   interface User {
     // role: UserRole;
-    metadata: UserMetadata;
-    lastVisitedAt: Date;
+    // other properties...
   }
 }
 
@@ -60,8 +53,7 @@ export const authOptions: NextAuthOptions = {
       ...session,
       user: {
         ...session.user,
-        id: user.id,
-        metadata: user.metadata
+        id: user.id
       }
     })
   },
