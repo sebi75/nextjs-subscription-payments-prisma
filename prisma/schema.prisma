@@ -1,0 +1,161 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model User {
+  id             String    @id @default(uuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime? @map("email_verified")
+  image          String?
+  billingAddress Json?     @map("billing_address")
+  paymentMethod  Json?     @map("payment_method")
+  metadata       Json      @default("{}")
+
+  // relations definitions
+  subscription UserSubscription?
+  accounts     Account[]
+  sessions     Session[]
+}
+
+model UserSubscription {
+  id                   String             @id @default(uuid())
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id") // the subscription id in stripe
+  userId               String             @unique @map("user_id")
+  status               SubscriptionStatus @default(active)
+  type                 SubscriptionType   @default(Free) // by default, sign up users with the free plan
+  createdAt            DateTime           @default(now()) @map("created_at")
+  currentPeriodStart   DateTime           @default(now()) @map("current_period_start")
+  currentPeriodEnd     DateTime           @map("current_period_end")
+  metadata             Json?
+
+  // relations definitions
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  billingDetails BillingDetails? // this wont be defined for the users with the free plan
+
+  @@map("user_subscription")
+}
+
+enum SubscriptionType {
+  Free
+  Premium
+  Business
+  Enterprise
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  incomplete
+  incomplete_expired
+  trialing
+  past_due
+  unpaid
+  paused
+}
+
+model BillingDetails {
+  id                String           @id @default(uuid())
+  subscriptionId    String           @unique @map("subscription_id") // UserSubscription ID
+  priceId           String           @map("price_id")
+  quantity          Int              @default(1)
+  cancelAtPeriodEnd Boolean          @default(false) @map("cancel_at_period_end")
+  endedAt           DateTime?        @map("ended_at")
+  canceledAt        DateTime?        @map("canceled_at")
+  cancelAt          DateTime?        @map("cancel_at")
+  price             StripePrice      @relation(fields: [priceId], references: [id], onDelete: NoAction)
+  subscription      UserSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([priceId])
+  @@map("billing_details")
+}
+
+model StripePrice {
+  id              String               @id
+  productId       String               @map("product_id")
+  active          Boolean
+  description     String?              @db.Text
+  unitAmount      BigInt?              @map("unit_amount")
+  currency        String               @db.Char(3)
+  type            PricingType
+  interval        PricingPlanInterval?
+  intervalCount   Int?                 @map("interval_count")
+  trialPeriodDays Int?                 @map("trial_period_days")
+  metadata        Json
+  // relations definitions
+  billingDetails  BillingDetails[]
+  product         StripeProduct        @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("stripe_price")
+}
+
+enum PricingType {
+  one_time
+  recurring
+}
+
+enum PricingPlanInterval {
+  day
+  week
+  month
+  year
+}
+
+model StripeProduct {
+  id          String        @id
+  active      Boolean
+  name        String
+  description String?       @db.Text
+  image       String        @db.Text
+  metadata    Json
+  price       StripePrice[]
+
+  @@map("stripe_product")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
